@@ -1,0 +1,579 @@
+---
+title: "Segmentacion Ñahui"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = FALSE,# Prevents code but not the results
+                      message = FALSE,
+                      warning = FALSE)
+
+knitr::opts_knit$set(root.dir = dirname(rstudioapi::getActiveDocumentContext()$path))
+# https://towardsdatascience.com/five-r-markdown-tricks-that-you-may-not-know-about-71e93f50c026
+```
+
+# 1. Objetivo del Analisis
+
+-   Analizar las diferencias entre las distintas categorias de la Segmentacion Ñahui
+
+# 2. Descripcion del Data set
+
+**Dataset:** segmentacion_ñahui, Ventas  <br /> **Año**: Ene 2021 - Dic 2021. <br /> **Fuente :** *procesos_ic.dbo.segmento_nahui_actual*. <br /> **Descripción:** Informacion de las transacciones de PostVenta de los concesionarios.
+
+# 3. Descripcion de las Variables
+
+<!-- **1. empresa** : Es el nombre comercial de la empresa.   -->
+
+<!-- **2. alias** : Es el sobrenombre o el identificador por el cual es más conocida la empresa.   -->
+
+<!-- **3. desc** : Es la industria nicho en la cual está ubicada la empresa.   -->
+
+<!-- **4. sector** : Es el sector en el cual se desarrolla la empresa.   -->
+
+<!-- **5. tamano** : Es el tamaño de la empresa donde 1 significa muy pequeño y 300 muy grande.   -->
+
+<!-- **6. ingresos** : Es la cantidad de ingresos percibidos al año de la empresa(Millones de Dolares).   -->
+
+<!-- **7. ransomware_cost** : Es la cantidad de dinero solicitada por el atacante por el rescate(Millones de Dolares).   -->
+
+<!-- **8. ransomware_flag_pago** : Es el estado final del ataque donde se sabe si se pagó, no pago o no hay información.   -->
+
+<!-- **9. ransomware_anio** : Es el año del ataque Ransomware.   -->
+
+<!-- **10. ransomware_mes** : Es el mes del ataque Ransomware.   -->
+
+<!-- **11. pais** : El país de la empresa.   -->
+
+<!-- **12. hist_int** : Es la historia resumida del ataque.   -->
+
+<!-- **13. ransomware** : Es el nombre del Ransomware utilizado por el atacante.   -->
+
+<!-- **14. inicio** : Es la fecha desde que se tiene registro de los ingresos de la compañía.   -->
+
+<!-- **15. url** : Es la página web de la noticia donde se puede encontrar más información del ataque.   -->
+
+# 4. Analisis Exploratorio de Datos
+
+```{r librerias}
+suppressPackageStartupMessages(library(odbc))
+suppressPackageStartupMessages(library(lares))
+suppressPackageStartupMessages(library(readxl))
+suppressPackageStartupMessages(library(ggtext))
+suppressPackageStartupMessages(library(scales))
+suppressPackageStartupMessages(library(forcats))
+suppressPackageStartupMessages(library(stringr))
+suppressPackageStartupMessages(library(stringi))
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(ggrepel))
+suppressPackageStartupMessages(library(magrittr))
+suppressPackageStartupMessages(library(lubridate))
+suppressPackageStartupMessages(library(tidyverse))
+suppressPackageStartupMessages(library(patchwork))
+suppressPackageStartupMessages(library(data.table))
+suppressPackageStartupMessages(library(kableExtra))
+suppressPackageStartupMessages(library(formattable))
+suppressPackageStartupMessages(library(DataExplorer))
+suppressPackageStartupMessages(library(summarytools))
+suppressPackageStartupMessages(library(tidylog))
+
+```
+
+## 4.1 Estructura de la informacion
+
+```{r coneccion-a-sql}
+# 
+# con <- DBI::dbConnect(odbc(),
+#                       Driver = "SQL Server",
+#                       Server = "10.110.20.59",
+#                       Database = "contactabilidad_ic",
+#                       UID = "user_ic",
+#                       PWD = "Derco.2020")
+
+# seg_nahui <- dbGetQuery(conn = con,"SELECT * FROM procesos_ic.dbo.segmento_nahui_actual",)
+
+# vts_auto <- dbGetQuery(conn = con,"SELECT * FROM procesos_sap_bwp.[dbo].[view_ventas_automotriz_sell_out_unica]")
+
+# ingreso <- dbGetQuery(conn = con,"SELECT NUMDOC,BRUT FROM [dwh_derco].[dbo].[BD_OSERGNI_202101]")
+
+# setwd("C:/Users/dincappuenot/OneDrive - Grupo Derco/Escritorio/Segmentacion Ñahui/")
+setwd(dirname(rstudioapi::getActiveDocumentContext()$path))
+
+seg <- read_rds("01.Data/segmentacion_ñahui_2022_01_10.rds")
+vts_auto <- read_rds("01.Data/ventas_automotriz_nuevos_2022_01_10.rds")
+
+
+# https://www.apeseg.org.pe/2020/06/diferencias-entre-los-sistemas-de-gas-y-gasolina/#:~:text=Potencia%20de%20motor%3A%20los%20sistemas,gas%2C%20su%20vida%20%C3%BAtil%20disminuir%C3%A1.&text=De%20esta%20manera%2C%20producen%20menso,de%20ozono%20que%20la%20gasolina.
+```
+
+```{r limpieza-datos-segmentacion}
+
+# Base Segmentacion Ñahui
+names(seg) %<>% str_to_lower()
+seg %<>% mutate_if(is.character,str_trim)
+seg %<>% mutate_if(is.character,str_to_upper)
+seg %<>% mutate_if(is.character,function(x)iconv(x,to = "latin1"))
+
+seg$modelo <- ifelse(seg$modelo=="NEW HUNTER","HUNTER",seg$modelo)
+
+
+seg %<>%
+  mutate(
+    modelo = case_when(
+      modelo == "GRAND_S3_GAS" ~ "GRAND S3_GAS",
+      modelo == "GRAND_VITARA_GAS" ~ "GRAND VITARA_GAS",
+      modelo == "H2_HAVAL_GAS" ~ "H2 HAVAL_GAS",
+      modelo == "H6_HAVAL_GAS" ~ "H6 HAVAL_GAS",
+      modelo == "HAVAL_H2_GAS" ~ "HAVAL H2_GAS",
+      modelo == "LOGAN_SEDAN_GAS" ~ "LOGAN SEDAN_GAS",
+      modelo == "S_CROSS_GAS" ~ "S-CROSS_GAS",
+      modelo == "S_PRESSO" ~ "S-PRESSO",
+      modelo == "S_PRESSO_GAS" ~ "S-PRESSO_GAS",
+      modelo == "SWIFT_SEDAN_GAS" ~ "SWIFT SEDAN_GAS",
+      modelo == "VOLEEX_C30_GAS" ~ "VOLEEX C30_GAS",
+      modelo == "WINGLE 5 GASOLINA" ~ "WINGLE 5",
+      TRUE ~ modelo
+    )
+  )
+
+modelo_comb <- seg$modelo  %>% 
+  str_split(pattern = "_",n = 2,simplify = T) %>% 
+  as.data.frame %>% 
+  rename(modelo=V1,
+         tipo_comb=V2) %>% 
+  mutate(tipo_comb=ifelse(tipo_comb!="GAS","GASOLINA",tipo_comb))
+
+seg$modelo <- NULL
+
+seg <- seg %>% bind_cols(modelo_comb)
+seg %<>% select(marca,modelo,tipo_comb,segmento_nahui)
+seg %<>% distinct()
+
+```
+
+# 3. Analisis Exploratorio de Datos
+
+## 3.1 Distribucion de Marcas y Modelos por Segmento Ñahui
+
+```{r Distribucion-de-Marca-Modelo-Segmentacion}
+
+seg %>%
+  group_by(segmento_nahui) %>%
+  summarise(n_marca = n_distinct(marca),
+            n_modelo = n_distinct(modelo)) %>%
+  arrange(desc(n_marca)) %>%
+  mutate(segmento_nahui = str_to_title(segmento_nahui)) %>%
+  rename(
+    '# Marcas' = n_marca,
+    '# Modelos' = n_modelo,
+    'Segmento Ñahui' = segmento_nahui
+  )
+
+```
+
+
+```{r limpieza-datos-ventas-autos-nuevos-1}
+vts_auto %>% glimpse
+# Formateo de Variables
+vts_auto$fecha_facturacion %<>% ymd
+vts_auto$periodo_facturacion <- format(vts_auto$fecha_facturacion,"%Y%m")
+vts_auto %<>% mutate_at(c("marca","modelo"),str_to_upper)
+vts_auto %<>% mutate_at(c("marca","modelo"),str_trim)
+
+# Feature Engineering
+vts_auto$flag_derco <- ifelse(vts_auto$sociedad=="Dercocenter","Dercocenter","Concesionario")
+
+# Filtros Todo el año 2021
+
+vts_2021 <- vts_auto %>%
+  filter(fecha_facturacion>="2021-01-01",
+         fecha_facturacion<"2022-01-01")
+
+# Seleccionando el registro con la ultima fecha de facturacion por vin
+
+vts_2021 <- vts_2021 %>% 
+  group_by(vin) %>% 
+  arrange(desc(fecha_facturacion)) %>% 
+  slice(1) %>% 
+  ungroup()
+
+```
+
+
+```{r limpieza-datos-ventas-autos-nuevos-2}
+
+# Hay varios registros en la Variable Modelo que tienen la palabra "GAS"
+vts_2021$modelo %>% unique() %>% str_subset("GAS")
+
+vts_2021 %<>%
+  mutate(
+    modelo = case_when(
+      modelo == "GRAND_S3_GAS" ~ "GRAND S3_GAS",
+      modelo == "GRAND_VITARA_GAS" ~ "GRAND VITARA_GAS",
+      modelo == "H2_HAVAL_GAS" ~ "H2 HAVAL_GAS",
+      modelo == "H6_HAVAL_GAS" ~ "H6 HAVAL_GAS",
+      modelo == "HAVAL_H2_GAS" ~ "HAVAL H2_GAS",
+      modelo == "LOGAN_SEDAN_GAS" ~ "LOGAN SEDAN_GAS",
+      modelo == "S_CROSS_GAS" ~ "S-CROSS_GAS",
+      modelo == "S_PRESSO" ~ "S-PRESSO",
+      modelo == "S_PRESSO_GAS" ~ "S-PRESSO_GAS",
+      modelo == "SWIFT_SEDAN_GAS" ~ "SWIFT SEDAN_GAS",
+      modelo == "VOLEEX_C30_GAS" ~ "VOLEEX C30_GAS",
+      modelo == "WINGLE 5 GASOLINA" ~ "WINGLE 5",
+      TRUE ~ modelo
+    ))
+  
+
+
+modelo_comb <- vts_2021$modelo  %>% 
+  str_split(pattern = "_",n = 2,simplify = T) %>% 
+  as.data.frame %>% 
+  rename(modelo=V1,
+         tipo_comb=V2) %>% 
+  mutate(tipo_comb=ifelse(tipo_comb!="GAS","GASOLINA",tipo_comb))
+
+vts_2021$modelo <- NULL
+
+vts_2021 <- vts_2021 %>% bind_cols(modelo_comb)
+rm(modelo_comb)
+# Hay varios registros en la Variable Modelo que tienen la palabra "#"
+
+vts_2021 %>% 
+  filter(modelo=="#") %>% 
+  distinct(marca,modelo,version)
+
+vts_2021 <- vts_2021 %>% 
+  mutate(modelo = case_when(
+    marca == "JAC" & modelo == "#" & str_detect(version, "T6") ~ "T6" ,
+    marca == "JAC" & modelo == "#" & str_detect(version, "REFINE") ~ "REFINE" ,
+    marca == "JAC" & modelo == "#" & str_detect(version, "JS4") ~ "JS4" ,
+    marca == "JAC" & modelo == "#" & str_detect(version, "S2") ~ "S2" ,
+    
+    marca == "CHANGAN" & modelo == "#" & str_detect(version, "HONOR") ~ "HONOR" ,
+    marca == "CHANGAN" & modelo == "#" & str_detect(version, "VAN") ~ "VAN" ,
+    
+    marca == "MAZDA" & modelo == "#" & str_detect(version, "BT50") ~ "BT50" ,
+    marca == "MAZDA" & modelo == "#" & str_detect(version, "CX3") ~ "CX3" ,
+    
+    marca == "SUZUKI" & modelo == "#" & str_detect(version, "APV") ~ "APV" ,
+    marca == "SUZUKI" & modelo == "#" & str_detect(version, "S-CROSS") ~ "S-CROSS" ,
+    marca == "SUZUKI" & modelo == "#" & str_detect(version, "ALTO") ~ "ALTO" ,
+    
+    marca == "RENAULT" & modelo == "#" & str_detect(version, "OROCH") ~ "OROCH" ,
+    
+    marca == "CITROEN" & modelo == "#" & str_detect(version, "F3  CACTUS") ~ "F3  CACTUS" ,
+    marca == "CITROEN" & modelo == "#" & str_detect(version, "C4 CACTUS") ~ "C4 CACTUS" ,
+    
+    marca == "HAVAL" & modelo == "#" & str_detect(version, "HAVAL H6") ~ "HAVAL H6" ,
+    
+    marca == "GREAT WALL" & modelo == "#" & str_detect(version, "WINGLE 5") ~ "WINGLE 5" ,
+    marca == "GREAT WALL" & modelo == "#" & str_detect(version, "VOLEEX C30") ~ "VOLEEX C30" ,
+    marca == "GREAT WALL" & modelo == "#" & str_detect(version, "GREAT WALL H6") ~ "GREAT WALL H6" ,
+    TRUE ~ modelo
+  )) 
+
+vts_2021$modelo <- ifelse(vts_2021$modelo=="CX3","CX-3",vts_2021$modelo)
+
+
+```
+
+## 3.2 Distribucion de Ventas durante el 2021
+
+```{r Distribucion-ventas-autos-nuevos-2021}
+
+vts_2021 %>% 
+  mutate(periodo_facturacion=format(fecha_facturacion,"%Y%m")) %>% 
+  count(periodo_facturacion) %>% 
+  ggplot(aes(x=periodo_facturacion,y=n,group=1))+
+  geom_bar(stat="identity",color="black",fill="steelblue")+
+  theme_classic()+
+  theme(axis.text.x = element_text(angle=90))
+
+```
+
+
+
+
+```{r cruce-segmentacion-ventas}
+
+seg %>% glimpse
+vts_2021 %>% glimpse
+  
+vts_2021 <- vts_2021 %>% left_join(seg,by=c("marca","modelo","tipo_comb"))
+
+# Marcas y Modelos de las Ventas que no estan mapeadas en la Segmetacion Ñahui
+vts_2021 %>% 
+  filter(is.na(segmento_nahui)) %>% 
+  distinct(marca,modelo)
+
+vts_2021 %<>% filter(!is.na(segmento_nahui))
+
+```
+
+## 3.3 Evolutivo de las distintas segmentaciones ñahui
+
+```{r evolutivo-segmentacion}
+
+vts_2021 %>% 
+  crosstab(segmento_nahui)
+
+
+vts_2021 %>% 
+  count(periodo_facturacion,segmento_nahui) %>% 
+  group_by(periodo_facturacion) %>% 
+  mutate(pct=n/sum(n)) %>% 
+  ungroup() %>% 
+  ggplot(aes(x=periodo_facturacion,y=pct,color=segmento_nahui,group=segmento_nahui))+
+  geom_line()+
+  geom_point()+
+  theme()
+
+```
+
+```{r vts-persona-empresa}
+
+# Distribucion general de DOCUMENTO
+
+vts_2021$numero_documento %>% 
+  as.numeric() %>% 
+  str_length() %>% 
+  table(useNA = "ifany")
+
+# Seleccionando los DNI de 8 DIGITOS
+
+# Seleccionando aquelos Documentos que tienen longitud <=8
+vts_2021_dni1 <- vts_2021 %>% 
+  mutate(numero_documento2 = as.numeric(numero_documento)) %>% 
+  filter(str_length(numero_documento2) <= 8) %>% 
+  mutate(numero_documento=numero_documento2) %>% 
+  select(-numero_documento2)
+
+vts_2021_dni1$numero_documento %<>% str_pad(width = 8,side = "left",pad = "0")
+
+# Seleccionando aquelos Documentos que tienen longitud 11 y que empiezan por 10
+vts_2021_dni2 <- vts_2021 %>% 
+  mutate(numero_documento2 = as.numeric(numero_documento)) %>% 
+  filter(str_length(numero_documento2) == 11) %>% 
+  filter(str_sub(numero_documento2,1,2) == 10) %>% 
+  mutate(numero_documento=str_sub(numero_documento2,3,10)) %>% 
+  select(-numero_documento2)
+
+vts_2021_dni <- vts_2021_dni1 %>% bind_rows(vts_2021_dni2)
+
+rm(vts_2021_dni1,vts_2021_dni2)
+
+# Distribucion de Personas 
+nrow(vts_2021_dni)/nrow(vts_2021) 
+
+```
+
+
+```{r cruce-reniec}
+
+# reniec <- read_rds("01.Data/reniec_2022_01_11.rds")
+reniec <- read_rds("01.Data/reniec_filtered.rds")
+
+dnis_seg <- vts_2021_dni %>% pull(numero_documento) %>% unique
+
+# Seleccionando los registros de Reniec que matchean con DNI  de Segmentacion y 
+# excluyendo duplicados
+
+reniec_seg <- reniec %>% 
+  filter(DOCUMENTO %in% dnis_seg) %>% 
+  distinct()
+
+vts_2021_dni <- vts_2021_dni %>% left_join(reniec_seg,by=c("numero_documento"="DOCUMENTO"))
+
+vts_2021_dni %>% glimpse
+
+vts_2021_dni %>% 
+  mutate(flag_reniec = is.na(SEXO)) %>% 
+  crosstab(flag_reniec)
+
+# Distribucion de Cruce con reniec
+vts_2021_dni %>% 
+  select(SEXO:ZONA) %>% 
+  plot_missing
+
+
+```
+
+```{r}
+# vts_2021_dni %>% write_rds("01.Data/seg01.rds")
+vts_2021_dni <- read_rds("01.Data/seg01.rds")
+
+```
+
+```{r cruce-ingresos}
+
+ingresos <- read_rds("01.Data/ingresos_2022_01_17.rds")
+
+ingresos$NUMDOC %>% 
+  # as.numeric %>%
+  str_length %>%
+  table(useNA = "ifany")
+
+dnis_seg <- vts_2021_dni %>% pull(numero_documento) %>% unique
+
+# Seleccionando los registros de ingresos que matchean con DNI  de Segmentacion y 
+# excluyendo duplicados
+
+ingresos <- ingresos %>%
+  dplyr::mutate(NUMDOC = as.numeric(NUMDOC)) %>%
+  dplyr::mutate(NUMDOC = as.character(NUMDOC)) %>%
+  dplyr::mutate(NUMDOC = str_pad(NUMDOC,width = 8,side = "left",pad = "0")) 
+
+ingresos_seg <- ingresos %>% 
+  filter(NUMDOC %in% dnis_seg)
+
+ingresos_seg <- ingresos_seg %>% 
+  group_by(NUMDOC) %>% 
+  summarise(ingreso=sum(BRUT))
+
+vts_2021_dni <- vts_2021_dni %>% left_join(ingresos_seg,by=c("numero_documento"="NUMDOC"))
+
+vts_2021_dni$dependiente <- is.na(vts_2021_dni$ingreso)
+
+names(vts_2021_dni) %<>% str_to_lower()
+
+```
+
+```{r}
+# vts_2021_dni %>% write_rds("01.Data/seg02.rds")
+vts_2021_dni <- read_rds("01.Data/seg02.rds")
+```
+
+## 3.4 Distribucion de Dependientes
+
+```{r persona-dependiente}
+require(SmartEDA)
+
+vts_2021_dni %>% 
+  select(segmento_nahui,dependiente) %>% 
+  mutate(dependiente = ifelse(dependiente,
+                              'dependiente',
+                              'independiente')) %>%   
+  crosstab(segmento_nahui,dependiente,prow =  T) %>% 
+  select(1,3,4) %>% 
+  rename(segmento_nahui=1) %>% 
+  mutate(segmento_nahui = str_to_title(segmento_nahui)) %>% 
+  mutate(segmento_nahui = fct_reorder(segmento_nahui, total, .desc = FALSE)) %>% 
+  ggplot(aes(y=segmento_nahui))+
+  geom_segment(aes(
+    x = dependiente,
+    xend = total,
+    y = segmento_nahui,
+    yend = segmento_nahui),
+    size = 2,color = "gray89") +
+  # geom_point(aes(x = dependiente),size=4,color="#4169E1")+
+  geom_point(aes(x = dependiente),size=4,color="#00CD00")+
+  # geom_point(aes(x = total),size=4,color="darkorange")+
+  geom_point(aes(x = total),size=4,color="gray70")+
+  geom_label_repel(
+    aes(x = dependiente,label = paste0("n: ", dependiente ) ),
+    nudge_x = -0.1,direction = "y",size = 2.2,nudge_y = 0.2)+
+  geom_label_repel(
+    aes(x = total,label = paste0("n: ", total ) ),
+    nudge_x = -0.1,direction = "y",size = 2.2,nudge_y = 0.2)+
+  theme_bw()+
+  theme(axis.text.y = element_text(size=12))+
+  labs(x="Pesos(%)",
+       y=NULL,
+       # title = "<span style = 'color: red;'>Virginica irises</span> have the largest average sepal width")+
+       title = "Comparacion de pesos entre la Distribucion <span style = 'color: gray70;'>General</span> vs <span style = 'color: #00CD00;'> Persona Dependiente</span> - 2021")+
+  theme(plot.title = element_markdown(size = 17),
+        plot.title.position = "plot")
+
+```
+
+```{r ingresos-por-segmentacion}
+
+vts_2021_dni %>% 
+  group_by(segmento_nahui) %>% 
+  summarise(
+    ingreso_prom = median(ingreso, na.rm = T),
+    ingreso_cv = sd(ingreso, na.rm = T) / mean(ingreso, na.rm =T)) %>%
+  arrange(desc(ingreso_prom))
+
+vts_2021_dni %>%
+  group_by(segmento_nahui) %>%
+  summarise(
+    ingreso_prom = median(ingreso, na.rm = T),
+    ingreso_cv = sd(ingreso, na.rm = T) / mean(ingreso, na.rm = T)) %>%
+  arrange(desc(ingreso_prom)) %>%
+  mutate(segmento_nahui = str_to_title(segmento_nahui),
+         segmento_nahui = fct_reorder(segmento_nahui,
+                                      ingreso_prom, .desc = T)
+         ) %>%
+  mutate(
+    poder_adquisitivo = case_when(
+      ingreso_prom > 3500 ~ "Alto (3.5K-4.5K]",
+      ingreso_prom > 2400 ~ "Mediano (2.4K-3.5K]",
+      TRUE ~ "Bajo (0-2.4K]"
+    )
+  ) %>%
+  mutate(
+    poder_adquisitivo = fct_relevel(
+      poder_adquisitivo,
+      "Alto (3.5K-4.5K]",
+      "Mediano (2.4K-3.5K]",
+      "Bajo (0-2.4K]"
+    )
+  ) %>% 
+  ggplot(aes(x = segmento_nahui,y=ingreso_prom,size=ingreso_prom))+
+  geom_segment(aes(
+    x = segmento_nahui,
+    xend = segmento_nahui,
+    y = 2000,
+    yend = ingreso_prom),
+    size = 2,color = "gray70")+
+  geom_point(aes(color=poder_adquisitivo))+
+  scale_color_brewer(palette="Greens",direction = -1)+
+  # scale_color_manual(values = c("#00CD00","#00EE00","#00FF00"))+
+  scale_size_continuous(range = c(10,20),
+                        breaks = NULL)+
+  scale_y_continuous(labels = label_number(prefix = "S/.", 
+                                           suffix = "K",
+                                           scale = 1e-3,
+                                           big.mark = ","))+
+  theme_classic()+
+  labs(color="Poder Adquisitivo",
+       x=NULL,size=NULL,y=NULL,
+       title = "Distribucion de Ingresos por Segmento Ñahui")+
+  theme(plot.title.position = 'plot',
+        plot.title = element_text(face = "bold",
+                                  size=20),
+        legend.position = "top",
+        legend.text = element_text(size=12),
+        axis.text.x = element_text(size=15))
+
+# Alto, mediano y regular poder adquisitivo
+```
+
+```{r edad}
+
+vts_2021_dni$edad <- vts_2021_dni %$% interval(fh_nacimiento,fecha_facturacion) / duration(num = 1, units = "years") %>% trunc()
+
+
+vts_2021_dni %>% 
+  ggplot(aes(x=edad,fill=segmento_nahui))+
+  geom_density(alpha=0.3)
+
+
+vts_2021_dni %>% 
+  group_by(segmento_nahui) %>% 
+  summarise(edad_prom=median(edad,na.rm = T),
+            cantidad=n()) %>% 
+  arrange(edad_prom)
+
+```
+
+
+
+
+
+
+
+
+
+
